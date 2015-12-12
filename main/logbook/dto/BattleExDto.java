@@ -21,6 +21,8 @@ import logbook.util.JsonUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import com.dyuproject.protostuff.Tag;
+import com.google.gson.annotations.Expose;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * １回の会敵情報
@@ -88,10 +90,12 @@ public class BattleExDto extends AbstractDto {
 
     /** 海域名 */
     @Tag(18)
+    @Expose
     private String questName;
 
     /** ランク */
     @Tag(19)
+    @Expose
     private ResultRank rank;
 
     /** マス */
@@ -100,30 +104,37 @@ public class BattleExDto extends AbstractDto {
 
     /** 敵艦隊名 */
     @Tag(21)
+    @Expose
     private String enemyName;
 
     /** ドロップフラグ */
     @Tag(22)
+    @Expose
     private boolean dropShip;
 
     /** ドロップフラグ */
     @Tag(39)
+    @Expose
     private boolean dropItem;
 
     /** 艦種 */
     @Tag(23)
+    @Expose
     private String dropType;
 
     /** 艦名 */
     @Tag(24)
+    @Expose
     private String dropName;
 
     /** ドロップ艦ID */
     @Tag(46)
+    @Expose
     private int dropShipId;
 
     /** アイテム名 */
     @Tag(47)
+    @Expose
     private String dropItemName;
 
     /** MVP艦（ゼロ始まりのインデックス） */
@@ -135,6 +146,7 @@ public class BattleExDto extends AbstractDto {
 
     /** 提督Lv */
     @Tag(27)
+    @Expose
     private int hqLv;
 
     /** 
@@ -148,10 +160,12 @@ public class BattleExDto extends AbstractDto {
 
     /** 母港空き（ドロップ分を含まない） */
     @Tag(35)
+    @Expose
     private int shipSpace;
 
     /** 装備空き（ドロップ分を含まない） */
     @Tag(36)
+    @Expose
     private int itemSpace;
 
     /** 連合艦隊における退避意見 [退避する艦(0-11), 護衛艦(0-11)] */
@@ -179,7 +193,8 @@ public class BattleExDto extends AbstractDto {
      * @author Nekopanda
      */
     public static class Phase {
-
+        @SerializedName("kind")
+        @Expose
         @Tag(1)
         private final BattlePhaseKind kind;
         /** 味方HP */
@@ -194,10 +209,14 @@ public class BattleExDto extends AbstractDto {
         private final int[] nowEnemyHp;
 
         /** ランク */
+        @SerializedName("rank")
+        @Expose
         @Tag(5)
         private ResultRank estimatedRank;
 
         /** 夜戦 */
+        @SerializedName("isnight")
+        @Expose
         @Tag(6)
         private final boolean isNight;
 

@@ -28,6 +28,7 @@ import logbook.config.UserDataConfig;
 import logbook.constants.AppConstants;
 import logbook.data.Data;
 import logbook.data.EventListener;
+import logbook.data.nio.Ramdisk;
 import logbook.dto.BasicInfoDto;
 import logbook.dto.BattleExDto;
 import logbook.dto.BattleExDto.Phase;
@@ -1170,6 +1171,7 @@ public final class GlobalContext {
                 state = checkDataState(endSortie);
 
                 addUpdateLog("母港情報を更新しました");
+                Ramdisk.writeShipInfo(shipMap, apidata);
             }
         } catch (Exception e) {
             LOG.get().warn("母港を更新しますに失敗しました", e);
@@ -1239,6 +1241,9 @@ public final class GlobalContext {
             }
 
             addUpdateLog("海戦情報を更新しました");
+
+            Ramdisk.writeBattleInfo(battle);
+
             if (AppConfig.get().isPrintSortieLog()) {
                 addConsole("自=" + Arrays.toString(phase.getNowFriendHp()));
                 if (battle.isCombined()) {
@@ -1344,6 +1349,8 @@ public final class GlobalContext {
             isStart = false;
             addUpdateLog("海戦結果を更新しました");
 
+            Ramdisk.writeBattleInfo(battle);
+
             // ドロップを表示
             if (battle != null) {
                 if (AppConfig.get().isPrintDropLog()) {
@@ -1385,6 +1392,8 @@ public final class GlobalContext {
                 }
             }
             addConsole("護衛退避しました");
+
+            Ramdisk.writeBattleInfo(battle);
         } catch (Exception e) {
             LOG.get().warn("護衛退避を更新しますに失敗しました", e);
             LOG.get().warn(data);
@@ -2357,6 +2366,9 @@ public final class GlobalContext {
             ApplicationMain.main.updateMapCell(mapCellDto);
 
             addUpdateLog("出撃しました");
+
+            Ramdisk.writeNextMapCellInfo(mapCellDto);
+
             if (AppConfig.get().isPrintSortieLog())
                 addConsole("行先 " + mapCellDto.toString());
         } catch (Exception e) {
@@ -2379,6 +2391,9 @@ public final class GlobalContext {
             battle = null;
 
             ApplicationMain.main.updateMapCell(mapCellDto);
+
+            Ramdisk.writeNextMapCellInfo(mapCellDto);
+
             if (AppConfig.get().isPrintSortieLog())
                 addConsole("行先 " + mapCellDto.toString());
         } catch (Exception e) {

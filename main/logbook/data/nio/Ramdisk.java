@@ -9,13 +9,14 @@ import java.util.Map;
 
 import javax.json.JsonObject;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 import logbook.dto.BattleExDto;
 import logbook.dto.MapCellDto;
 import logbook.dto.ShipDto;
+import logbook.internal.AkashiTimer.ShipState;
 import logbook.internal.LoggerHolder;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 public class Ramdisk {
     private static final LoggerHolder LOG = new LoggerHolder(Ramdisk.class);
@@ -152,8 +153,19 @@ public class Ramdisk {
             MapCellNioBean mInfo = MapCellNioBean.toMapCellNioBean(mapCellDto);
             rm.write(gson.toJson(mInfo).getBytes("utf-8"));
         } catch (Exception e) {
-            LOG.get().warn("写入战斗信息时出错", e);
+            LOG.get().warn("写入下一点信息时出错", e);
             throw new Exception(e);
+        }
+    }
+
+    public static void writeShipState(Map<Integer, ShipState> stateMap) {
+        try {
+            Ramdisk rm = new Ramdisk("z:\\kancolle_shipState.mm");
+            ShipStateNioInfo stateNioInfo = new ShipStateNioInfo();
+            stateNioInfo.shipStates = ShipStateNioBean.toBeans(stateMap);
+            rm.write(gson.toJson(stateNioInfo).getBytes("utf-8"));
+        } catch (Exception e) {
+            LOG.get().warn("写入舰船修理信息时出错", e);
         }
     }
 }

@@ -4,10 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import logbook.dto.ItemDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.ItemDto;
 
 public class ItemNioInfo {
     /**

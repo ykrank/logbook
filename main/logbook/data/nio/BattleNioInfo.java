@@ -3,10 +3,10 @@ package logbook.data.nio;
 import java.util.ArrayList;
 import java.util.List;
 
-import logbook.dto.BattleExDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.BattleExDto;
 
 public class BattleNioInfo {
     /**

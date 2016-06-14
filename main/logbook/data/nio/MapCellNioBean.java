@@ -1,9 +1,9 @@
 package logbook.data.nio;
 
-import logbook.dto.MapCellDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.MapCellDto;
 
 public class MapCellNioBean {
     /**
@@ -59,7 +59,7 @@ public class MapCellNioBean {
      * 获取类型
      * @return
      */
-    private String getNextKind() {
+    public String getNextKind() {
         if (this.eventId == -1) {
             if (this.isBoss) {
                 return "ボス";

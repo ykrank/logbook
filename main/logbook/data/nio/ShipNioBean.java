@@ -10,10 +10,10 @@ package logbook.data.nio;
 import java.util.ArrayList;
 import java.util.List;
 
-import logbook.dto.ShipDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.ShipDto;
 
 public class ShipNioBean {
 
@@ -127,27 +127,31 @@ public class ShipNioBean {
     public static List<ShipNioBean> toBeans(Iterable<ShipDto> oldShips) {
         List<ShipNioBean> ships = new ArrayList<ShipNioBean>();
         for (ShipDto oldShip : oldShips) {
-            ShipNioBean ship = new ShipNioBean();
-            ship.id = oldShip.getId();
-            ship.shipid = oldShip.getShipId();
-            ship.charid = oldShip.getCharId();
-            ship.name = oldShip.getName();
-            ship.sortno = oldShip.getSortno();
-            ship.lv = oldShip.getLv();
-            ship.stype = oldShip.getStype();
-            ship.nowhp = oldShip.getNowhp();
-            ship.maxhp = oldShip.getMaxhp();
-            ship.cond = oldShip.getCond();
-            ship.locked = oldShip.getLocked();
-            ship.bull = oldShip.getBull();
-            ship.fuel = oldShip.getFuel();
-            ship.maxBull = oldShip.getBullMax();
-            ship.maxFuel = oldShip.getFuelMax();
-            ship.hougekipower = oldShip.getHougekiPower();
-            ship.fleetpos = oldShip.getFleetpos();
-            ship.docktime = oldShip.getDocktime();
-            ships.add(ship);
+            ships.add(toBean(oldShip));
         }
         return ships;
+    }
+
+    public static ShipNioBean toBean(ShipDto oldShip) {
+        ShipNioBean ship = new ShipNioBean();
+        ship.id = oldShip.getId();
+        ship.shipid = oldShip.getShipId();
+        ship.charid = oldShip.getCharId();
+        ship.name = oldShip.getName();
+        ship.sortno = oldShip.getSortno();
+        ship.lv = oldShip.getLv();
+        ship.stype = oldShip.getStype();
+        ship.nowhp = oldShip.getNowhp();
+        ship.maxhp = oldShip.getMaxhp();
+        ship.cond = oldShip.getCond();
+        ship.locked = oldShip.getLocked();
+        ship.bull = oldShip.getBull();
+        ship.fuel = oldShip.getFuel();
+        ship.maxBull = oldShip.getBullMax();
+        ship.maxFuel = oldShip.getFuelMax();
+        ship.hougekipower = oldShip.getHougekiPower();
+        ship.fleetpos = oldShip.getFleetpos();
+        ship.docktime = oldShip.getDocktime();
+        return ship;
     }
 }

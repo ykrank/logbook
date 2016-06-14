@@ -3,10 +3,10 @@
  */
 package logbook.data.nio;
 
-import logbook.dto.BattleExDto.Phase;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.BattleExDto.Phase;
 
 /**
  * @author ykrank

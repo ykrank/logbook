@@ -6,10 +6,10 @@ package logbook.data.nio;
 import java.util.ArrayList;
 import java.util.List;
 
-import logbook.dto.DockDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.DockDto;
 
 /**
  * @author ykrank

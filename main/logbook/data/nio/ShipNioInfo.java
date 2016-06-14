@@ -9,10 +9,10 @@ import java.util.Map;
 
 import javax.json.JsonObject;
 
-import logbook.dto.ShipDto;
-
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+
+import logbook.dto.ShipDto;
 
 /**
  * @author ykrank

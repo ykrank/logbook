@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import logbook.data.nio.Ramdisk;
 import logbook.dto.DockDto;
 import logbook.dto.ShipDto;
 
@@ -153,6 +154,8 @@ public class AkashiTimer {
         long start = this.startTime.getTime();
         long elapsed = now.getTime() - start;
 
+        boolean saveInRamdisk = this.stateMap.isEmpty();
+
         for (int p = 0; p < ships.size(); ++p) {
             ShipDto ship = ships.get(p);
             if ((p < akashiCapacity) && !ship.isHalfDamage() && (ship.getNowhp() != ship.getMaxhp())) {
@@ -178,8 +181,7 @@ public class AkashiTimer {
                 if (elapsed < MINIMUM_TIME) {
                     gain = 0;
                     next = MINIMUM_TIME - elapsed;
-                }
-                else {
+                } else {
                     // 実質的な修理経過時間
                     long validTime = elapsed - (REPAIR_BASE + AKASHI_DELAY);
                     gain = (int) (validTime / time1pt);
@@ -211,6 +213,11 @@ public class AkashiTimer {
                 this.stateMap.put(ship.getShipId(), state);
             }
         }
+
+        if (saveInRamdisk && repairing) {
+            Ramdisk.writeShipState(this.stateMap);
+        }
+
         return new RepairState(repairing ? states : null, elapsed, firstNotify);
     }
 }

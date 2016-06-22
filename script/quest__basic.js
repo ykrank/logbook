@@ -30,16 +30,16 @@ function questCategory(category) {
 
 function questType(type) {
 	switch ( type ) {
-		case 1:
-			return "日";
 		case 2:
-			return "週";
-		case 3:
-			return "月";
 		case 4:
-			return "単";
 		case 5:
-			return "他";
+			return "日";
+		case 3:
+			return "週";
+			break;
+		case 6:
+			return "月";
+			break;
 		default:
 			return "1";
 	}

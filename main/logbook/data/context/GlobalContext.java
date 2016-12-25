@@ -168,8 +168,8 @@ public final class GlobalContext {
     /** 最後に資源ログに追加した時間 */
     volatile private static Date materialLogLastUpdate = null;
 
-    /** 連合艦隊 */
-    private static boolean combined;
+    /** 連合艦隊の種類 */
+    private static int combinedKind;
 
     /** 情報の取得状態 0:母港情報未受信 1:正常 2:マスターデータの更新が必要 3:アカウントが変わった！   */
     private static int state = 0;
@@ -202,10 +202,7 @@ public final class GlobalContext {
     }
 
     private static enum MATERIAL_DIFF {
-        NEW_VALUE,
-        OBTAINED,
-        CONSUMED,
-        NONE;
+        NEW_VALUE, OBTAINED, CONSUMED, NONE;
     }
 
     public static void load(UserDataConfig config) {
@@ -567,7 +564,7 @@ public final class GlobalContext {
      * @return 連合艦隊を組んでいるか
      */
     public static boolean isCombined() {
-        return combined;
+        return (combinedKind != 0);
     }
 
     /**
@@ -769,6 +766,9 @@ public final class GlobalContext {
         case COMBINED_EACH_BATTLE:
             doBattle(data, apidata, BattlePhaseKind.COMBINED_EACH_BATTLE);
             break;
+        case COMBINED_EACH_BATTLE_WATER:
+            doBattle(data, apidata, BattlePhaseKind.COMBINED_EACH_BATTLE_WATER);
+            break;
         // 海戦結果
         case BATTLE_RESULT:
             doBattleresult(data, apidata);
@@ -829,7 +829,7 @@ public final class GlobalContext {
         case PRACTICE:
             doPractice(data, apidata);
             break;
-        // 演習情報 
+        // 演習情報
         case PRACTICE_ENEMYINFO:
             doPracticeEnemyinfo(data, apidata);
             break;
@@ -874,7 +874,7 @@ public final class GlobalContext {
         }
     }
 
-    /** 
+    /**
      * updateContext()が呼ばれた数
      * @return updateContext()が呼ばれた数
      */
@@ -996,7 +996,8 @@ public final class GlobalContext {
                     }
                     dockdto.removeExceptFlagship();
                     dockdto.setUpdate(true);
-                } else {
+                }
+                else {
                     // 入れ替えまたは外す
                     // 入れ替え前の艦娘(いない場合はnull)
                     ShipDto cship = (shipidx < ships.size()) ? ships.get(shipidx) : null;
@@ -1204,9 +1205,9 @@ public final class GlobalContext {
                 //addConsole("遠征情報を更新しました");
 
                 // 連合艦隊を更新する
-                combined = false;
+                combinedKind = 0;
                 if (apidata.containsKey("api_combined_flag")) {
-                    combined = (apidata.getInt("api_combined_flag") != 0);
+                    combinedKind = apidata.getInt("api_combined_flag");
                     //addConsole("連合艦隊を更新しました");
                 }
 
@@ -1248,6 +1249,7 @@ public final class GlobalContext {
                 if (battle == null) {
                     battle = new BattleExDto(data.getCreateDate());
                     battle.setBasicInfo(maxChara - shipMap.size(), maxSlotitem - itemMap.size());
+                    battle.setCombinedKind(combinedKind);
                 }
                 BattleExDto.Phase phase = battle.addPhase(apidata, phaseKind);
 
@@ -1265,8 +1267,7 @@ public final class GlobalContext {
                 }
 
                 if ((phaseKind != BattlePhaseKind.PRACTICE_BATTLE) &&
-                        (phaseKind != BattlePhaseKind.PRACTICE_MIDNIGHT))
-                { // 演習ではやらない
+                        (phaseKind != BattlePhaseKind.PRACTICE_MIDNIGHT)) { // 演習ではやらない
                     for (int i = 0; i < ships.size(); ++i) {
                         checkShipSunk(ships.get(i), nowFriendHp[i], sunkShips);
                     }
@@ -1594,7 +1595,8 @@ public final class GlobalContext {
                         createitem.setType(item.getTypeName());
                         createItemList.add(createitem);
                     }
-                } else {
+                }
+                else {
                     createItemList.add(createitem);
                 }
                 CreateReportLogic.storeCreateItemReport(createitem);
@@ -1769,7 +1771,7 @@ public final class GlobalContext {
 
     /**
      * 艦隊と遠征の状態を更新します
-     * 
+     *
      * @param apidata
      */
     private static void doDeck(JsonArray apidata) {
@@ -1961,7 +1963,7 @@ public final class GlobalContext {
 
     /**
      * 艦娘ロックを更新する
-     * 
+     *
      * @param data
      */
     private static void doLockShip(Data data, JsonValue json) {
@@ -1986,7 +1988,7 @@ public final class GlobalContext {
 
     /**
      * 装備ロックを更新する
-     * 
+     *
      * @param data
      */
     private static void doLockSlotitem(Data data, JsonValue json) {
@@ -2089,8 +2091,9 @@ public final class GlobalContext {
 
                 // 資材ログに書き込む
                 if ((materialLogLastUpdate == null)
-                        || (TimeUnit.MILLISECONDS.toSeconds(time.getTime() - materialLogLastUpdate.getTime()) >
-                        AppConfig.get().getMaterialLogInterval())) {
+                        || (TimeUnit.MILLISECONDS
+                                .toSeconds(time.getTime() - materialLogLastUpdate.getTime()) > AppConfig.get()
+                                .getMaterialLogInterval())) {
                     CreateReportLogic.storeMaterialReport(material, basic);
 
                     materialLogLastUpdate = time;
@@ -2385,7 +2388,7 @@ public final class GlobalContext {
                 int id = Integer.parseInt(idstr);
                 isSortie[id - 1] = true;
                 // 連合艦隊
-                if ((id == 1) && combined) {
+                if ((id == 1) && (combinedKind != 0)) {
                     isSortie[1] = true;
                 }
             }
@@ -2482,7 +2485,7 @@ public final class GlobalContext {
 
     /**
      * マップ情報を処理します
-     * 
+     *
      * @param data
      */
     private static void doMapInfo(Data data, JsonValue json) {
@@ -2527,7 +2530,7 @@ public final class GlobalContext {
 
     /**
      * 任務情報を処理します
-     * 
+     *
      * @param data
      */
     private static void doMission(Data data, JsonValue json) {
@@ -2544,7 +2547,7 @@ public final class GlobalContext {
 
     /**
      * 演習情報を処理します
-     * 
+     *
      * @param data
      */
     private static void doPractice(Data data, JsonValue json) {
@@ -2595,13 +2598,13 @@ public final class GlobalContext {
 
     /**
      * 連合艦隊操作を処理します
-     * 
+     *
      * @param data
      */
     private static void doCombined(Data data, JsonValue json) {
         try {
             JsonObject apidata = data.getJsonObject().getJsonObject("api_data");
-            combined = (apidata.getInt("api_combined") != 0);
+            combinedKind = apidata.getInt("api_combined");
             for (int i = 0; i < 2; ++i) {
                 DockDto dockdto = dock.get(Integer.toString(i + 1));
                 if (dockdto != null) {

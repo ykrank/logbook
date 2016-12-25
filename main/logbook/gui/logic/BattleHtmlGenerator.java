@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package logbook.gui.logic;
 
@@ -17,6 +17,7 @@ import logbook.dto.BattleExDto;
 import logbook.dto.BattleExDto.Phase;
 import logbook.dto.BattlePhaseKind;
 import logbook.dto.BattleResultDto;
+import logbook.dto.EnemyShipDto;
 import logbook.dto.ItemDto;
 import logbook.dto.ShipBaseDto;
 import logbook.dto.ShipDto;
@@ -126,10 +127,10 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param hp
      * @param phaseName
      */
-    private <SHIP extends ShipBaseDto>
-            void genParmeters(String tableTitle,
-                    List<SHIP> ships, int[][] hp, String[] phaseName, int hqLv, boolean isSecond)
-    {
+    @SuppressWarnings("unchecked")
+    private <SHIP extends ShipBaseDto> void genParmeters(String tableTitle,
+            List<SHIP> ships, int[][] hp, String[] phaseName, int hqLv, boolean isSecond, String[] formation,
+            List<SHIP> allShips, BattleExDto battle) {
         if (ships.size() == 0) {
             return;
         }
@@ -139,17 +140,26 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         if (ships.get(0) instanceof ShipDto) {
             isFriend = true;
             ci = 0;
-        }
-        else {
+        } else {
             isFriend = false;
             ci = 1;
         }
 
         int numPhases = (hp.length / 2) - 1;
+        CalcTaiku calcTaiku = new CalcTaiku();
+        int formationNo = BattleExDto.fromFormation(formation[isFriend ? 0 : 1]);
 
         this.begin("div", BOX_CLASS);
         this.begin("table", PARAM_TABLE_CLASS[ci]);
-        this.inline("caption", tableTitle, null);
+        String kantaiValueString;
+        if (isFriend) {
+            kantaiValueString = String.format("　(艦隊防空値:%.2f)",
+                    calcTaiku.getFriendKantaiValue((List<ShipDto>) allShips, formationNo));
+        } else {
+            kantaiValueString = String.format("　(艦隊防空値:%d)", calcTaiku.getEnemyKantaiValue(allShips, formationNo));
+        }
+        this.inline("caption",
+                tableTitle + kantaiValueString, null);
 
         this.begin("tr", null);
 
@@ -158,6 +168,10 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         this.inline("th", "cond.", null);
         this.inline("th", "制空", null);
         this.inline("th", "索敵", null);
+        this.inline("th", "加重対空値", null);
+        this.inline("th", "割合撃墜", null);
+        this.inline("th", "固定撃墜", null);
+        this.inline("th", "最低保証数", null);
         this.inline("th", "開始時", null);
         for (int i = 0; i < numPhases; ++i) {
             this.inline("th", "", null);
@@ -199,13 +213,91 @@ public class BattleHtmlGenerator extends HTMLGenerator {
 
             if (isFriend) {
                 this.inline("td", String.valueOf(((ShipDto) ship).getCond()), null);
-            }
-            else {
+            } else {
                 this.inline("td", "", null);
             }
 
             this.inline("td", seiku.toString(), null);
             this.inline("td", sakuteki.toString(), null);
+
+            // 強引に対空カットインの情報を持ってくる
+            Phase phase = battle.getPhaseList().get(0);
+            List<AirBattleDto> airList = new ArrayList<>();
+            if (phase.getAir() != null)
+                airList.add(phase.getAir());
+            if (phase.getAir2() != null)
+                airList.add(phase.getAir2());
+
+            String fixedShootDown = "";
+
+            if (isFriend) {
+                this.inline("td", String.format("%d", calcTaiku.getFriendKajuuValue((ShipDto) ship)), null);
+                if (battle.isCombined()) {
+                    int combinedKind = battle.getCombinedKind();
+                    if (combinedKind == 2) { // 水上打撃部隊のみ判明しているため、それ以外は不明にしておく
+                        this.inline("td",
+                                String.format("%.2f%%", calcTaiku.getFriendProportionalShootDownCombined((ShipDto) ship,
+                                        (combinedKind * 10) + (isSecond ? 2 : 1)) * 100),
+                                null);
+                        fixedShootDown = String.join("/", airList.stream()
+                                .mapToInt(air -> air.airFire != null ? air.airFire[1] : 0)
+                                .map(kind -> calcTaiku.getFriendFixedShootDownCombined((ShipDto) ship,
+                                        (List<ShipDto>) allShips, formationNo,
+                                        kind, (combinedKind * 10) + (isSecond ? 2 : 1)))
+                                .mapToObj(value -> String.valueOf(value))
+                                .toArray(String[]::new));
+                        if (fixedShootDown.length() == 0) {
+                            fixedShootDown += calcTaiku.getFriendFixedShootDownCombined((ShipDto) ship,
+                                    (List<ShipDto>) allShips, formationNo, -1,
+                                    (combinedKind * 10) + (isSecond ? 2 : 1));
+                        }
+                    } else {
+                        this.inline("td", "不明", null);
+                        fixedShootDown = "不明";
+                    }
+                } else {
+                    this.inline("td",
+                            String.format("%.2f%%", calcTaiku.getFriendProportionalShootDown((ShipDto) ship) * 100),
+                            null);
+                    fixedShootDown = String.join("/", airList.stream()
+                            .mapToInt(air -> air.airFire != null ? air.airFire[1] : 0)
+                            .map(kind -> calcTaiku.getFriendFixedShootDown((ShipDto) ship, (List<ShipDto>) allShips,
+                                    formationNo, kind))
+                            .mapToObj(value -> String.valueOf(value))
+                            .toArray(String[]::new));
+                    if (fixedShootDown.length() == 0) {
+                        fixedShootDown += calcTaiku.getFriendFixedShootDown((ShipDto) ship, (List<ShipDto>) allShips,
+                                formationNo);
+                    }
+                }
+                this.inline("td", fixedShootDown, null);
+                String security = String.join(" / ", airList.stream()
+                        .mapToInt(air -> air.airFire != null ? air.airFire[1] : 0)
+                        .mapToObj(kind -> String.format("%d (+%d)", calcTaiku.getFriendSecurity(),
+                                calcTaiku.getFriendSecurity(kind) - calcTaiku.getFriendSecurity()))
+                        .toArray(String[]::new));
+                if (security.length() == 0) {
+                    security += String.format("%d (+%d)", calcTaiku.getFriendSecurity(), 0);
+                }
+                this.inline("td", security, null);
+            } else {
+                this.inline("td", String.format("%d", calcTaiku.getEnemyKajuuValue(ship)), null);
+                if (battle.isEnemyCombined()) {
+                    this.inline("td",
+                            String.format("%.2f%%",
+                                    calcTaiku.getEnemyProportionalShootDownCombined(ship, isSecond ? 2 : 1) * 100),
+                            null);
+                    fixedShootDown += calcTaiku.getEnemyFixedShootDownCombined(ship, allShips, formationNo, -1,
+                            isSecond ? 2 : 1);
+                } else {
+                    this.inline("td",
+                            String.format("%.2f%%", calcTaiku.getEnemyProportionalShootDown(ship) * 100), null);
+                    fixedShootDown += calcTaiku.getEnemyFixedShootDown(ship, allShips, formationNo);
+                }
+                this.inline("td", fixedShootDown, null);
+                this.inline("td", String.format("%d (+?)", calcTaiku.getEnemySecurity()), null);
+            }
+
             this.inline("td", nowhp + "/" + maxhp, null);
 
             for (int p = 1; p <= numPhases; ++p) {
@@ -237,12 +329,17 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         this.begin("tr", null);
 
         SeikuString totalSeiku = new SeikuString(ships);
-        SakutekiString totalSakuteki = new SakutekiString(ships, hqLv);
+        SakutekiString totalSakuteki = new SakutekiString(ships,
+                hqLv);
         this.inline("td", "", null);
         this.inline("td", "合計", null);
         this.inline("td", "", null);
         this.inline("td", totalSeiku.toString(), null);
         this.inline("td", totalSakuteki.toString(), null);
+        this.inline("td", "", null);
+        this.inline("td", "", null);
+        this.inline("td", "", null);
+        this.inline("td", "", null);
         this.inline("td", totalNowHp + "/" + totalMaxHp, null);
 
         for (int i = 0; i < numPhases; ++i) {
@@ -250,7 +347,9 @@ public class BattleHtmlGenerator extends HTMLGenerator {
             this.inline("td", getColSpan(3), phaseName[i], null);
         }
 
-        this.inline("td", getColSpan(10), "", null);
+        this.inline("td",
+
+                getColSpan(10), "", null);
 
         this.end(); // tr
 
@@ -263,9 +362,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param gen
      * @param ships
      */
-    private <SHIP extends ShipBaseDto>
-            void genSlotitemTable(List<SHIP> ships, boolean isSecond)
-    {
+    private <SHIP extends ShipBaseDto> void genSlotitemTable(List<SHIP> ships, boolean isSecond) {
         if (ships.size() == 0) {
             return;
         }
@@ -445,8 +542,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param targetShips
      */
     private void genAtackTableContent(BattleAtackDto atack,
-            ShipBaseDto[] originShips, ShipBaseDto[] targetShips)
-    {
+            ShipBaseDto[] originShips, ShipBaseDto[] targetShips) {
         if (atack.origin.length == 0) {
             this.begin("tr", null);
             this.inline("td", "なし", null);
@@ -509,8 +605,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                 text = new String[] { "自軍", "敵軍" };
                 textClass = TEXT_CLASS[0];
                 damageClass = DAMAGE_CLASS[0];
-            }
-            else {
+            } else {
                 origin = enemyShips;
                 target = friendShips;
                 targetHp = friendHp;
@@ -525,8 +620,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                 if (i == 0) {
                     this.inline("td", text[0], null);
                     this.inline("td", this.getShipName(origin, atack.origin[0]), textClass[0]);
-                }
-                else {
+                } else {
                     this.inline("td", getColSpan(2), "", null);
                 }
 
@@ -556,8 +650,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param enemyHp
      */
     private void genAirBattle(AirBattleDto air, String title,
-            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp)
-    {
+            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp) {
         if (air == null) {
             return;
         }
@@ -629,8 +722,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                 text = new String[] { "自軍", "敵軍ダメージ" };
                 tableClass = AIR_DAMAGE_TABLE_CLASS[0];
                 textClass = TEXT_CLASS[0];
-            }
-            else {
+            } else {
                 origin = enemyShips;
                 target = friendShips;
                 targetHp = friendHp;
@@ -647,8 +739,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                     this.begin("tr", null);
                     this.inline("td", "なし", null);
                     this.end(); // tr
-                }
-                else {
+                } else {
                     for (int i = 0; i < atack.origin.length; ++i) {
                         this.begin("tr", null);
                         this.inline("td", this.getShipName(origin, atack.origin[i]), textClass[0]);
@@ -679,8 +770,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param enemyHp
      */
     private void genRaigekiBattle(List<BattleAtackDto> raigeki, String title,
-            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp)
-    {
+            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp) {
         if ((raigeki == null) || (raigeki.size() == 0)) {
             return;
         }
@@ -698,8 +788,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                 targetHp = enemyHp;
                 text = new String[] { "自軍攻撃", "敵軍ダメージ" };
                 textClass = RAIGEKI_DAMAGE_TABLE_CLASS[0];
-            }
-            else {
+            } else {
                 origin = enemyShips;
                 target = friendShips;
                 targetHp = friendHp;
@@ -728,12 +817,14 @@ public class BattleHtmlGenerator extends HTMLGenerator {
     /**
      * １回目の砲撃の後、雷撃を行う戦闘か？
      * 空母機動部隊の昼戦、および、敵連合艦隊戦の昼戦
-     * および、連合艦隊(機動部隊)の昼戦の場合
+     * および、連合艦隊(機動部隊)の昼戦、および、連合艦隊(水上部隊)の昼戦の場合
      * @param kind
      * @return
      */
     private static boolean isCombinedMidRaigekiBattle(BattlePhaseKind kind) {
-        return (kind == BattlePhaseKind.COMBINED_BATTLE) || (kind == BattlePhaseKind.COMBINED_EC_BATTLE) || (kind == BattlePhaseKind.COMBINED_EACH_BATTLE);
+        return (kind == BattlePhaseKind.COMBINED_BATTLE) || (kind == BattlePhaseKind.COMBINED_EC_BATTLE)
+                || (kind == BattlePhaseKind.COMBINED_EACH_BATTLE)
+                || (kind == BattlePhaseKind.COMBINED_EACH_BATTLE_WATER);
     }
 
     /**
@@ -743,8 +834,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @param index
      */
     private void genPhase(BattleExDto battle, int index,
-            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp)
-    {
+            ShipBaseDto[] friendShips, ShipBaseDto[] enemyShips, int[] friendHp, int[] enemyHp) {
         BattleExDto.Phase phase = battle.getPhaseList().get(index);
 
         List<AirBattleDto> airList = new ArrayList<>();
@@ -761,6 +851,13 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         if (phase.getHougeki3() != null)
             hougekiList.add(phase.getHougeki3());
 
+        // 基地航空隊(噴式)
+        AirBattleDto airBaseInjection = phase.getAirBaseInjection();
+        if (airBaseInjection != null) {
+            this.genAirBattle(airBaseInjection, "噴式強襲基地航空隊攻撃",
+                    friendShips, enemyShips, friendHp, enemyHp);
+        }
+
         // 基地航空隊
         List<AirBattleDto> airBaseList = phase.getAirBase();
         if (airBaseList != null) {
@@ -769,6 +866,13 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                 this.genAirBattle(attack, "基地航空隊攻撃(" + (i + 1) + "/" + airBaseList.size() + ")",
                         friendShips, enemyShips, friendHp, enemyHp);
             }
+        }
+
+        // 航空戦(噴式)
+        AirBattleDto airInjection = phase.getAirInjection();
+        if (airInjection != null) {
+            this.genAirBattle(airInjection, "噴式強襲航空戦)",
+                    friendShips, enemyShips, friendHp, enemyHp);
         }
 
         // 航空戦 → 支援艦隊による攻撃 →　開幕対潜 → 開幕 → 航空戦２回目
@@ -883,8 +987,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
                         int damage = dto.damage[i];
                         if (dto.friendAtack) {
                             enemy[target] += damage;
-                        }
-                        else {
+                        } else {
                             friend[target] += damage;
                         }
                     }
@@ -978,8 +1081,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
             this.inline("td", "MVP(第二艦隊)", null);
             this.inline("td", mvp2, null);
             this.end(); // tr
-        }
-        else {
+        } else {
             this.begin("tr", null);
             this.inline("td", "MVP", null);
             this.inline("td", mvp1, null);
@@ -1005,8 +1107,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
      * @throws java.io.IOException ファイルの書き込みに失敗した
      *  */
     public String generateHTML(String title, BattleResultDto result, BattleExDto battle, boolean genCharset)
-            throws IOException
-    {
+            throws IOException {
         if (battle.isCompleteResult() == false) {
             return null;
         }
@@ -1021,8 +1122,7 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         String header;
         if (battle.isPractice()) {
             header = "「" + battle.getEnemyName() + "」との演習 (" + time + ")";
-        }
-        else {
+        } else {
             header = result.getMapCell().detailedString() + " (" + time + ")";
         }
         this.inline("div", "<h1>" + header + "</h1>", new String[] { "title" });
@@ -1035,18 +1135,32 @@ public class BattleHtmlGenerator extends HTMLGenerator {
         this.inline("div", "<h2>パラメータ</h2>", sectionTitleClass);
 
         int[][][] hpList = this.calcHP(battle);
-        String[] phaseName = (battle.getPhase1().isNight() ?
-                new String[] { "夜戦後", "昼戦後" } : new String[] { "昼戦後", "夜戦後" });
+        String[] phaseName = (battle.getPhase1().isNight() ? new String[] { "夜戦後", "昼戦後" }
+                : new String[] { "昼戦後", "夜戦後" });
+        List<ShipDto> allFriendShips = new ArrayList<ShipDto>();
+        allFriendShips.addAll(battle.getDock().getShips());
+        if (battle.isCombined()) {
+            allFriendShips.addAll(battle.getDockCombined().getShips());
+        }
         this.genParmeters(battle.getDock().getName(),
-                battle.getDock().getShips(), hpList[0], phaseName, battle.getHqLv(), false);
+                battle.getDock().getShips(), hpList[0], phaseName, battle.getHqLv(), false, battle.getFormation(),
+                allFriendShips, battle);
         if (battle.isCombined()) {
             this.genParmeters(battle.getDockCombined().getName(),
-                    battle.getDockCombined().getShips(), hpList[1], phaseName, battle.getHqLv(), true);
+                    battle.getDockCombined().getShips(), hpList[1], phaseName, battle.getHqLv(), true,
+                    battle.getFormation(), allFriendShips, battle);
         }
-        this.genParmeters(battle.getEnemyName(), battle.getEnemy(), hpList[2], phaseName, 0, false);
+        List<EnemyShipDto> allEnemyShips = new ArrayList<EnemyShipDto>();
+        allEnemyShips.addAll(battle.getEnemy());
+        if (battle.isEnemyCombined()) {
+            allEnemyShips.addAll(battle.getEnemyCombined());
+        }
+        this.genParmeters(battle.getEnemyName(), battle.getEnemy(), hpList[2], phaseName, 0, false,
+                battle.getFormation(), allEnemyShips, battle);
         if (battle.isEnemyCombined()) {
             this.genParmeters("敵護衛部隊",
-                    battle.getEnemyCombined(), hpList[3], phaseName, 0, true);
+                    battle.getEnemyCombined(), hpList[3], phaseName, 0, true, battle.getFormation(), allEnemyShips,
+                    battle);
         }
 
         // 装備を生成 //

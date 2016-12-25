@@ -183,6 +183,10 @@ public class BattleExDto extends AbstractDto {
     @Tag(51)
     private String resultJson;
 
+    /** 連合艦隊の種類 */
+    @Tag(52)
+    private int combinedKind = 0;
+
     /////////////////////////////////////////////////
 
     /**
@@ -243,8 +247,12 @@ public class BattleExDto extends AbstractDto {
         private double[] damageRate;
 
         /** 攻撃シーケンス */
+        @Tag(36)
+        private AirBattleDto airBaseInjection = null;
         @Tag(35)
         private List<AirBattleDto> airBase = null;
+        @Tag(37)
+        private AirBattleDto airInjection = null;
         @Tag(11)
         private AirBattleDto air = null;
         @Tag(12)
@@ -280,8 +288,8 @@ public class BattleExDto extends AbstractDto {
 
             // 自分は連合艦隊の第二艦隊か？（自連合艦隊 vs 敵連合艦隊の夜戦で
             // 自分が第二艦隊であることの確認）
-            this.isFriendSecond = (object.containsKey("api_active_deck") ?
-                    (object.getJsonArray("api_active_deck").getInt(0) == 2) : false);
+            this.isFriendSecond = (object.containsKey("api_active_deck")
+                    ? (object.getJsonArray("api_active_deck").getInt(0) == 2) : false);
 
             this.kind = kind;
             this.isNight = kind.isNight();
@@ -292,9 +300,12 @@ public class BattleExDto extends AbstractDto {
             this.nowEnemyHpCombined = isEnemyCombined ? beforeEnemyHpCombined.clone() : null;
 
             // 夜間触接
-            JsonValue jsonTouchPlane = object.get("api_touch_plane");
-            if ((jsonTouchPlane != null) && (jsonTouchPlane != JsonValue.NULL)) {
-                this.touchPlane = JsonUtils.getIntArray(object, "api_touch_plane");
+            JsonArray jsonTouchPlane = object.getJsonArray("api_touch_plane");
+            if (jsonTouchPlane != null) {
+                this.touchPlane = new int[] {
+                        Integer.parseInt(jsonTouchPlane.get(0).toString()),
+                        Integer.parseInt(jsonTouchPlane.get(1).toString()),
+                };
             }
 
             // 照明弾発射艦
@@ -313,6 +324,18 @@ public class BattleExDto extends AbstractDto {
                     JsonObject obj = (JsonObject) elem;
                     this.airBase.add(new AirBattleDto(obj, isFriendCombined || isEnemyCombined, true));
                 }
+            }
+
+            // 基地航空隊（墳式強襲）
+            JsonObject air_base_injection = object.getJsonObject("api_air_base_injection");
+            if (air_base_injection != null) {
+                this.airBaseInjection = new AirBattleDto(air_base_injection, isFriendCombined || isEnemyCombined, true);
+            }
+
+            // 航空戦（墳式強襲）
+            JsonObject injection_kouku = object.getJsonObject("api_injection_kouku");
+            if (injection_kouku != null) {
+                this.airInjection = new AirBattleDto(injection_kouku, isFriendCombined || isEnemyCombined, false);
             }
 
             // 航空戦（通常）
@@ -336,14 +359,16 @@ public class BattleExDto extends AbstractDto {
                     if (edam != null) {
                         this.support = BattleAtackDto.makeSupport(edam);
                     }
-                } else if ((support_air != null) && (support_air != JsonValue.NULL)) {
+                }
+                else if ((support_air != null) && (support_air != JsonValue.NULL)) {
                     JsonValue stage3 = ((JsonObject) support_air).get("api_stage3");
                     if ((stage3 != null) && (stage3 != JsonValue.NULL)) {
                         this.support = BattleAtackDto.makeSupport(((JsonObject) stage3).getJsonArray("api_edam"));
                     }
                 }
                 this.supportType = toSupport(support_flag.intValue());
-            } else {
+            }
+            else {
                 this.supportType = "";
             }
 
@@ -380,9 +405,13 @@ public class BattleExDto extends AbstractDto {
 
             // ダメージを反映 //
 
+            if (this.airBaseInjection != null)
+                this.doAtack(this.airBaseInjection.atacks);
             if (this.airBase != null)
                 for (AirBattleDto attack : this.airBase)
                     this.doAtack(attack.atacks);
+            if (this.airInjection != null)
+                this.doAtack(this.airInjection.atacks);
             if (this.air != null)
                 this.doAtack(this.air.atacks);
             this.doAtack(this.support);
@@ -473,7 +502,8 @@ public class BattleExDto extends AbstractDto {
                     if (item.getSlotitemId() == 42) { //応急修理要員
                         hps[index] = (int) (ship.getMaxhp() * 0.2);
                         return;
-                    } else if (item.getSlotitemId() == 43) { //応急修理女神
+                    }
+                    else if (item.getSlotitemId() == 43) { //応急修理女神
                         hps[index] = ship.getMaxhp();
                         return;
                     }
@@ -557,7 +587,8 @@ public class BattleExDto extends AbstractDto {
             if ((this.kind == BattlePhaseKind.LD_AIRBATTLE) ||
                     (this.kind == BattlePhaseKind.COMBINED_LD_AIR)) {
                 // 空襲戦
-                if (friendGaugeRate == 0) {
+                // S勝利は発生しないと思われる(完全勝利Sのみ)
+                if (friendGaugeMax <= friendGauge) {
                     return ResultRank.PERFECT;
                 }
                 if (friendGaugeRate < 10) {
@@ -573,17 +604,21 @@ public class BattleExDto extends AbstractDto {
                     return ResultRank.D;
                 }
                 return ResultRank.E;
-            } else {
+            }
+            else {
                 // PHASE1:轟沈艦なし かつ 敵艦全滅
                 if ((friendSunk == 0) && (enemySunk == numStartEships)) {
-                    if (friendGaugeRate == 0) { //受けたダメージが0
+                    // 戦闘終了時のHPが戦闘開始時のHP以上の場合、完全勝利S判定にする
+                    // ソースはscenes/BattleResultMain.swfのgetTweenShowRank()参照
+                    if (friendGaugeMax <= friendGauge) {
                         return ResultRank.PERFECT;
-                    } else {
+                    }
+                    else {
                         return ResultRank.S;
                     }
                 }
-                // PHASE2:轟沈艦なし かつ 敵艦隊の戦闘開始時の数が1隻以上(必要?) かつ 敵艦の撃沈数が7割以上
-                else if ((friendSunk == 0) && (numStartEships >= 1)
+                // PHASE2:轟沈艦なし かつ 敵艦隊の戦闘開始時の数が1隻より上 かつ 敵艦の撃沈数が7割以上
+                else if ((friendSunk == 0) && (numStartEships > 1)
                         && (enemySunk >= Math.floor(0.7 * numStartEships))) {
                     return ResultRank.A;
                 }
@@ -626,13 +661,16 @@ public class BattleExDto extends AbstractDto {
                     if (dto.friendAtack) {
                         if (target < 6) {
                             this.nowEnemyHp[target] -= damage;
-                        } else {
+                        }
+                        else {
                             this.nowEnemyHpCombined[target - 6] -= damage;
                         }
-                    } else {
+                    }
+                    else {
                         if (target < 6) {
                             this.nowFriendHp[target] -= damage;
-                        } else {
+                        }
+                        else {
                             this.nowFriendHpCombined[target - 6] -= damage;
                         }
                     }
@@ -678,13 +716,17 @@ public class BattleExDto extends AbstractDto {
 
         /**
          * 攻撃の全シーケンスを取得
-         * [ 基地航空隊航空戦, 航空戦1, 支援艦隊の攻撃, 航空戦2, 開幕, 夜戦, 砲撃戦1, 雷撃, 砲撃戦2, 砲撃戦3 ]
+         * [ 噴式基地航空隊航空戦, 基地航空隊航空戦, 噴式航空戦, 航空戦1, 支援艦隊の攻撃, 航空戦2, 開幕, 夜戦, 砲撃戦1, 雷撃, 砲撃戦2, 砲撃戦3 ]
          * 各戦闘がない場合はnullになる
          * @return
          */
         public BattleAtackDto[][] getAtackSequence() {
             return new BattleAtackDto[][] {
+                    ((this.airBaseInjection == null) || (this.airBaseInjection.atacks == null)) ? null : this
+                            .toArray(this.airBaseInjection.atacks),
                     this.getAirBaseBattlesArray(),
+                    ((this.airInjection == null) || (this.airInjection.atacks == null)) ? null : this
+                            .toArray(this.airInjection.atacks),
                     ((this.air == null) || (this.air.atacks == null)) ? null : this.toArray(this.air.atacks),
                     this.support == null ? null : this.toArray(this.support),
                     ((this.air2 == null) || (this.air2.atacks == null)) ? null : this.toArray(this.air2.atacks),
@@ -865,6 +907,13 @@ public class BattleExDto extends AbstractDto {
         }
 
         /**
+         * @return airInjection
+         */
+        public AirBattleDto getAirInjection() {
+            return this.airInjection;
+        }
+
+        /**
          * 航空戦1
          * @return air
          */
@@ -959,6 +1008,13 @@ public class BattleExDto extends AbstractDto {
         }
 
         /**
+         * @return airBaseInjection
+         */
+        public AirBattleDto getAirBaseInjection() {
+            return this.airBaseInjection;
+        }
+
+        /**
          * @return airBase
          */
         public List<AirBattleDto> getAirBase() {
@@ -1002,7 +1058,8 @@ public class BattleExDto extends AbstractDto {
                 this.addPhase(phase.getJson(), phase.getKind());
             }
             this.readResultJson(JsonUtils.fromString(this.resultJson));
-        } else {
+        }
+        else {
             // 旧バージョンのログに対応
             // ドロップの"アイテム"をdropItemNameに移動させる
             if (this.dropItem && !this.dropShip && StringUtils.isEmpty(this.dropItemName)) {
@@ -1026,7 +1083,8 @@ public class BattleExDto extends AbstractDto {
 
             if (object.containsKey("api_dock_id")) {
                 dockId = object.get("api_dock_id").toString();
-            } else {
+            }
+            else {
                 dockId = object.get("api_deck_id").toString();
             }
 
@@ -1099,13 +1157,15 @@ public class BattleExDto extends AbstractDto {
             if (isFriendCombined) {
                 this.startFriendHpCombined = new int[numFshipsCombined];
                 this.maxFriendHpCombined = new int[numFshipsCombined];
-            } else {
+            }
+            else {
                 this.maxFriendHpCombined = null;
             }
             if (isEnemyCombined) {
                 this.startEnemyHpCombined = new int[numEshipsCombined];
                 this.maxEnemyHpCombined = new int[numEshipsCombined];
-            } else {
+            }
+            else {
                 this.maxEnemyHpCombined = null;
             }
 
@@ -1142,7 +1202,8 @@ public class BattleExDto extends AbstractDto {
                         this.maxFriendHp[i - 1] = maxHp;
                         this.friendGaugeMax += this.startFriendHp[i - 1] = hp;
                     }
-                } else {
+                }
+                else {
                     if ((i - 6) <= numEships) {
                         this.maxEnemyHp[i - 1 - 6] = maxHp;
                         this.enemyGaugeMax += this.startEnemyHp[i - 1 - 6] = hp;
@@ -1158,7 +1219,8 @@ public class BattleExDto extends AbstractDto {
                             this.maxFriendHpCombined[i - 1] = maxHp;
                             this.friendGaugeMax += this.startFriendHpCombined[i - 1] = hp;
                         }
-                    } else {
+                    }
+                    else {
                         if ((i - 6) <= numEshipsCombined) {
                             this.maxEnemyHpCombined[i - 1 - 6] = maxHp;
                             this.enemyGaugeMax += this.startEnemyHpCombined[i - 1 - 6] = hp;
@@ -1196,7 +1258,8 @@ public class BattleExDto extends AbstractDto {
                             phase.getNowFriendHp(), phase.getNowFriendHpCombined(),
                             phase.getNowEnemyHp(), phase.getNowEnemyHpCombined()),
                     kind);
-        } else {
+        }
+        else {
             this.completeDamageAndAddPhase(new Phase(this, object, kind,
                     this.startFriendHp, this.startFriendHpCombined,
                     this.startEnemyHp, this.startEnemyHpCombined), kind);
@@ -1207,7 +1270,8 @@ public class BattleExDto extends AbstractDto {
     private void completeDamageAndAddPhase(Phase phase, BattlePhaseKind kind) {
         if (kind.isPractice()) {
             phase.practiceDamage(this);
-        } else {
+        }
+        else {
             phase.battleDamage(this);
         }
         this.phaseList.add(phase);
@@ -1216,7 +1280,8 @@ public class BattleExDto extends AbstractDto {
     private void readResultJson(JsonObject object) {
         if (object.get("api_quest_name") != null) {
             this.questName = object.getString("api_quest_name");
-        } else {
+        }
+        else {
             // 演習の場合はない
             this.questName = null;
         }
@@ -1234,14 +1299,16 @@ public class BattleExDto extends AbstractDto {
             this.dropShipId = getShip.getInt("api_ship_id");
             this.dropType = getShip.getString("api_ship_type");
             this.dropName = getShip.getString("api_ship_name");
-        } else {
+        }
+        else {
             this.dropType = "";
             this.dropName = "";
         }
         if (this.dropItem) {
             String name = UseItem.get(object.getJsonObject("api_get_useitem").getInt("api_useitem_id"));
             this.dropItemName = StringUtils.defaultString(name);
-        } else {
+        }
+        else {
             this.dropItemName = "";
         }
         this.mvp = object.getInt("api_mvp");
@@ -1454,7 +1521,8 @@ public class BattleExDto extends AbstractDto {
             if (this.mapCellDto == null) {
                 return false;
             }
-        } else {
+        }
+        else {
             // 演習の場合
         }
         return (this.friends != null) && (this.getDock() != null) &&
@@ -1835,5 +1903,17 @@ public class BattleExDto extends AbstractDto {
      */
     public int getDropShipId() {
         return this.dropShipId;
+    }
+
+    /**
+     * 連合艦隊の種類を取得します
+     * @return 連合艦隊の種類(0:未結成、1:機動部隊、2:水上部隊、3:輸送部隊、-x:強制解隊)
+     */
+    public int getCombinedKind() {
+        return this.combinedKind;
+    }
+
+    public void setCombinedKind(int combinedKind) {
+        this.combinedKind = combinedKind;
     }
 }
